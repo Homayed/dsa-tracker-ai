@@ -9,6 +9,8 @@ import schemas
 from database import get_db
 from dependencies import get_current_user
 
+from services.embedding_service import is_auto_embed_enabled, upsert_problem_embedding
+
 router = APIRouter(
     prefix="/problems",
     tags=["Problems"],
@@ -39,6 +41,15 @@ def create_problem(
     db.add(new_problem)
     db.commit()
     db.refresh(new_problem)
+    if is_auto_embed_enabled():
+        try:
+            upsert_problem_embedding(
+                db=db,
+                problem=new_problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for problem {new_problem.id}: {exc}")
 
     return new_problem
 
@@ -134,6 +145,16 @@ def update_problem(
 
     db.commit()
     db.refresh(problem)
+
+    if is_auto_embed_enabled():
+        try:
+            upsert_problem_embedding(
+                db=db,
+                problem=problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for problem {problem.id}: {exc}")
 
     return problem
 
