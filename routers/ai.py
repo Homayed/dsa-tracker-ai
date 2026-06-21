@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -93,4 +93,50 @@ def embed_problem(
         "problem_id": problem.id,
         "vector_dimensions": len(embedding),
         "embedding_model": EMBEDDING_MODEL,
+    }
+
+@router.get("/search")
+def semantic_search(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(5, ge=1, le=10),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query_embedding = create_embedding(q)
+
+    distance_expr = ProblemEmbedding.embedding.cosine_distance(query_embedding)
+
+    results = (
+        db.query(
+            ProblemEmbedding,
+            DSAProblem,
+            distance_expr.label("distance"),
+        )
+        .join(DSAProblem, ProblemEmbedding.problem_id == DSAProblem.id)
+        .filter(ProblemEmbedding.user_id == current_user.id)
+        .order_by(distance_expr)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "query": q,
+        "limit": limit,
+        "results": [
+            {
+                "embedding_id": embedding.id,
+                "problem_id": problem.id,
+                "title": problem.title,
+                "platform": problem.platform,
+                "difficulty": problem.difficulty,
+                "pattern": problem.pattern,
+                "status": problem.status,
+                "confidence_level": problem.confidence_level,
+                "source_type": embedding.source_type,
+                "content": embedding.content,
+                "distance": float(distance),
+                "similarity_score": round(1 - float(distance), 4),
+            }
+            for embedding, problem, distance in results
+        ],
     }
