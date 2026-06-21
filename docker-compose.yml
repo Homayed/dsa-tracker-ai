@@ -11,5 +11,18 @@ services:
     volumes:
       - dsa_tracker_ai_data:/var/lib/postgresql/data
 
+  app:
+    build: .
+    container_name: dsa_tracker_ai_app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/dsa_tracker_ai_db
+      SECRET_KEY: change-this-later-to-a-long-secret-key
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
 volumes:
   dsa_tracker_ai_data:
