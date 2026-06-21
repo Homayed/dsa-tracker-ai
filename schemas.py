@@ -141,3 +141,46 @@ class ProblemResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class NoteCreate(BaseModel):
+    content: str = Field(..., min_length=2)
+
+
+class NoteUpdate(BaseModel):
+    content: Optional[str] = Field(default=None, min_length=2)
+
+
+class NoteResponse(BaseModel):
+    id: int
+    user_id: int
+    problem_id: int
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MistakeCreate(BaseModel):
+    mistake_category: Optional[str] = None
+    description: str = Field(..., min_length=2)
+    lesson_learned: Optional[str] = None
+
+
+class MistakeUpdate(BaseModel):
+    mistake_category: Optional[str] = None
+    description: Optional[str] = Field(default=None, min_length=2)
+    lesson_learned: Optional[str] = None
+
+
+class MistakeResponse(BaseModel):
+    id: int
+    user_id: int
+    problem_id: int
+    mistake_category: Optional[str]
+    description: str
+    lesson_learned: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

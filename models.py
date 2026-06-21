@@ -13,6 +13,8 @@ class User(Base):
     hashed_password = Column(String, nullable= False)
     created_at = Column(DateTime, default= datetime.utcnow)
     problems = relationship("DSAProblem", back_populates="owner")
+    notes = relationship("ProblemNote", back_populates="owner")
+    mistakes = relationship("Mistake", back_populates="owner")
 
 class DSAProblem(Base):
     __tablename__ = "problems"
@@ -37,3 +39,38 @@ class DSAProblem(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     owner = relationship("User", back_populates="problems")
+    notes = relationship("ProblemNote", back_populates="problem", cascade="all, delete-orphan")
+    mistakes = relationship("Mistake", back_populates="problem", cascade="all, delete-orphan")
+
+class ProblemNote(Base):
+    __tablename__ = "problem_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    problem_id = Column(Integer, ForeignKey("problems.id"), nullable=False)
+
+    content = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", back_populates="notes")
+    problem = relationship("DSAProblem", back_populates="notes")
+
+
+class Mistake(Base):
+    __tablename__ = "mistakes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    problem_id = Column(Integer, ForeignKey("problems.id"), nullable=False)
+
+    mistake_category = Column(String, nullable=True)
+    description = Column(Text, nullable=False)
+    lesson_learned = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", back_populates="mistakes")
+    problem = relationship("DSAProblem", back_populates="mistakes")
