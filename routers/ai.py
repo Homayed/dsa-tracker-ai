@@ -1,16 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel, Field
+
 from database import get_db
 from dependencies import get_current_user
 from models import DSAProblem, ProblemEmbedding, User
-from services.embedding_service import EMBEDDING_MODEL, create_embedding
+from services.embedding_service import (
+    CHAT_MODEL,
+    EMBEDDING_MODEL,
+    create_embedding,
+    generate_rag_answer,
+)
 
 router = APIRouter(
     prefix="/ai",
     tags=["AI"],
 )
 
+class AskAIRequest(BaseModel):
+    question: str = Field(..., min_length=2)
+    limit: int = Field(3, ge=1, le=5)
 
 def build_problem_embedding_text(problem: DSAProblem) -> str:
     return f"""
@@ -135,6 +145,82 @@ def semantic_search(
                 "source_type": embedding.source_type,
                 "content": embedding.content,
                 "distance": float(distance),
+                "similarity_score": round(1 - float(distance), 4),
+            }
+            for embedding, problem, distance in results
+        ],
+    }
+
+@router.post("/ask")
+def ask_ai(
+    request: AskAIRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query_embedding = create_embedding(request.question)
+
+    distance_expr = ProblemEmbedding.embedding.cosine_distance(query_embedding)
+
+    results = (
+        db.query(
+            ProblemEmbedding,
+            DSAProblem,
+            distance_expr.label("distance"),
+        )
+        .join(DSAProblem, ProblemEmbedding.problem_id == DSAProblem.id)
+        .filter(ProblemEmbedding.user_id == current_user.id)
+        .order_by(distance_expr)
+        .limit(request.limit)
+        .all()
+    )
+
+    if not results:
+        return {
+            "question": request.question,
+            "answer": "I could not find any saved DSA tracker data to answer this yet. Add and embed some problems first.",
+            "model": CHAT_MODEL,
+            "sources": [],
+        }
+
+    context_blocks = []
+
+    for index, (embedding, problem, distance) in enumerate(results, start=1):
+        context_blocks.append(
+            f"""
+Source {index}
+Problem ID: {problem.id}
+Title: {problem.title}
+Platform: {problem.platform}
+Difficulty: {problem.difficulty}
+Pattern: {problem.pattern}
+Status: {problem.status}
+Confidence Level: {problem.confidence_level}
+Source Type: {embedding.source_type}
+Content:
+{embedding.content}
+Similarity Score: {round(1 - float(distance), 4)}
+""".strip()
+        )
+
+    context = "\n\n---\n\n".join(context_blocks)
+
+    answer = generate_rag_answer(
+        question=request.question,
+        context=context,
+    )
+
+    return {
+        "question": request.question,
+        "answer": answer,
+        "model": CHAT_MODEL,
+        "sources": [
+            {
+                "embedding_id": embedding.id,
+                "problem_id": problem.id,
+                "title": problem.title,
+                "pattern": problem.pattern,
+                "difficulty": problem.difficulty,
+                "status": problem.status,
                 "similarity_score": round(1 - float(distance), 4),
             }
             for embedding, problem, distance in results
