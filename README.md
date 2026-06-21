@@ -1,5 +1,15 @@
 # DSA Tracker AI API
 
+[![Run Tests](https://github.com/Homayed/dsa-tracker-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/Homayed/dsa-tracker-ai/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-blue)
+![pgvector](https://img.shields.io/badge/pgvector-Vector%20Search-purple)
+![OpenAI](https://img.shields.io/badge/OpenAI-Embeddings%20%2B%20RAG-black)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue)
+![Render](https://img.shields.io/badge/Render-Live%20API-brightgreen)
+
+
 A production-style **AI-assisted DSA learning tracker backend** built with **FastAPI, PostgreSQL, Supabase, pgvector, OpenAI embeddings, and RAG**.
 
 This project helps users track solved DSA problems, notes, mistakes, review logs, confidence levels, and then uses AI to provide semantic search, personalized answers, and study recommendations based on the user’s own learning data.
