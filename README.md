@@ -26,6 +26,31 @@ https://dsa-tracker-ai-cw1a.onrender.com/docs
 
 ---
 
+## Demo Screenshots
+
+### GitHub Actions CI Success
+
+The project includes a GitHub Actions workflow that automatically runs the test suite on every push to the `main` branch. This confirms that the backend is tested and the CI pipeline is working successfully.
+
+![GitHub Actions Success](docs/images/github_actions.png)
+
+---
+
+### Live RAG AI Request
+
+The `/ai/ask` endpoint accepts a user question and uses the saved DSA learning data as context. The question is converted into an embedding, matched against stored vectors in Supabase PostgreSQL with pgvector, and then sent to an LLM with the retrieved context.
+
+![AI Ask Request](docs/images/ask_ai1.png)
+
+---
+
+### Live RAG AI Response
+
+The response shows the AI answering based on the user's own saved learning data, such as problems, notes, mistakes, and review logs. This demonstrates the working RAG flow: retrieval from vector search + LLM-generated personalized feedback.
+
+![AI Ask RAG Response](docs/images/ask_ai2.png)
+
+
 ## Project Purpose
 
 The goal of this project is to build more than a normal CRUD backend.
