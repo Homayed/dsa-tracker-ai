@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
+
+from typing import Optional
 
 import models
 import schemas
@@ -42,12 +45,46 @@ def create_problem(
 
 @router.get("/", response_model=list[schemas.ProblemResponse])
 def get_problems(
+    difficulty: Optional[str] = None,
+    pattern: Optional[str] = None,
+    problem_status: Optional[str] = Query(default=None, alias="status"),
+    confidence_level: Optional[int] = Query(default=None, ge=1, le=5),
+    search: Optional[str] = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    problems = db.query(models.DSAProblem).filter(
+    query = db.query(models.DSAProblem).filter(
         models.DSAProblem.user_id == current_user.id
-    ).all()
+    )
+
+    if difficulty:
+        query = query.filter(models.DSAProblem.difficulty == difficulty)
+
+    if pattern:
+        query = query.filter(models.DSAProblem.pattern.ilike(f"%{pattern}%"))
+
+    if problem_status:
+        query = query.filter(models.DSAProblem.status == problem_status)
+
+    if confidence_level is not None:
+        query = query.filter(models.DSAProblem.confidence_level == confidence_level)
+
+    if search:
+        search_value = f"%{search}%"
+
+        query = query.filter(
+            or_(
+                models.DSAProblem.title.ilike(search_value),
+                models.DSAProblem.pattern.ilike(search_value),
+                models.DSAProblem.platform.ilike(search_value),
+            )
+        )
+
+    problems = query.order_by(
+        models.DSAProblem.created_at.desc()
+    ).offset(skip).limit(limit).all()
 
     return problems
 
