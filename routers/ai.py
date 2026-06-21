@@ -13,6 +13,7 @@ from services.embedding_service import (
     generate_rag_answer,
     generate_study_recommendation,
 )
+from openai import APIError, AuthenticationError, OpenAIError, RateLimitError
 
 router = APIRouter(
     prefix="/ai",
@@ -25,6 +26,42 @@ class AskAIRequest(BaseModel):
 
 class StudyRecommendationRequest(BaseModel):
     days: int = Field(7, ge=1, le=14)
+
+def handle_ai_error(exc: Exception) -> None:
+    if isinstance(exc, AuthenticationError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="AI authentication failed. Please check the OpenAI API key.",
+        )
+
+    if isinstance(exc, RateLimitError):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="AI rate limit or quota reached. Please try again later or check billing.",
+        )
+
+    if isinstance(exc, APIError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OpenAI service is temporarily unavailable. Please try again later.",
+        )
+
+    if isinstance(exc, OpenAIError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service error. Please check API key, billing, or quota.",
+        )
+
+    if isinstance(exc, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unexpected AI service error.",
+    )
 
 def build_problem_embedding_text(problem: DSAProblem) -> str:
     return f"""
@@ -58,7 +95,11 @@ def embed_problem(
         )
 
     content = build_problem_embedding_text(problem)
-    embedding = create_embedding(content)
+
+    try:
+        embedding = create_embedding(content)
+    except Exception as exc:
+        handle_ai_error(exc)
 
     existing_embedding = (
         db.query(ProblemEmbedding)
@@ -116,7 +157,10 @@ def semantic_search(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query_embedding = create_embedding(q)
+    try:
+        query_embedding = create_embedding(q)
+    except Exception as exc:
+        handle_ai_error(exc)
 
     distance_expr = ProblemEmbedding.embedding.cosine_distance(query_embedding)
 
@@ -161,7 +205,10 @@ def ask_ai(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query_embedding = create_embedding(request.question)
+    try:
+        query_embedding = create_embedding(request.question)
+    except Exception as exc:
+        handle_ai_error(exc)
 
     distance_expr = ProblemEmbedding.embedding.cosine_distance(query_embedding)
 
@@ -208,10 +255,13 @@ Similarity Score: {round(1 - float(distance), 4)}
 
     context = "\n\n---\n\n".join(context_blocks)
 
-    answer = generate_rag_answer(
-        question=request.question,
-        context=context,
-    )
+    try:
+        answer = generate_rag_answer(
+            question=request.question,
+            context=context,
+        )
+    except Exception as exc:
+        handle_ai_error(exc)
 
     return {
         "question": request.question,
@@ -367,10 +417,13 @@ def recommend_study_plan(
         reviews=reviews,
     )
 
-    recommendation = generate_study_recommendation(
-        context=context,
-        days=request.days,
-    )
+    try:
+        recommendation = generate_study_recommendation(
+            context=context,
+            days=request.days,
+        )
+    except Exception as exc:
+        handle_ai_error(exc)
 
     return {
         "message": "Study recommendation generated successfully",

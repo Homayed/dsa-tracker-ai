@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, APIError, AuthenticationError, OpenAIError, RateLimitError
 from sqlalchemy.orm import Session
 
 from models import DSAProblem, ProblemEmbedding
@@ -21,12 +21,21 @@ def get_openai_client() -> OpenAI:
 
     return OpenAI(api_key=api_key)
 
+def is_ai_enabled() -> bool:
+    return os.getenv("AI_ENABLED", "false").lower() == "true"
+
+
+def raise_if_ai_disabled() -> None:
+    if not is_ai_enabled():
+        raise ValueError("AI features are currently disabled.")
+
 
 def is_auto_embed_enabled() -> bool:
     return os.getenv("AI_AUTO_EMBED", "false").lower() == "true"
 
 
 def create_embedding(text: str) -> list[float]:
+    raise_if_ai_disabled()
     if not text or not text.strip():
         raise ValueError("Text cannot be empty for embedding.")
 
@@ -246,6 +255,7 @@ def delete_source_embedding(
 
 
 def generate_rag_answer(question: str, context: str) -> str:
+    raise_if_ai_disabled()
     if not question or not question.strip():
         raise ValueError("Question cannot be empty.")
 
@@ -282,6 +292,7 @@ Saved DSA tracker context:
     return response.output_text
 
 def generate_study_recommendation(context: str, days: int) -> str:
+    raise_if_ai_disabled()
     if not context or not context.strip():
         return "I could not find enough saved DSA tracker data to recommend a study plan yet."
 
