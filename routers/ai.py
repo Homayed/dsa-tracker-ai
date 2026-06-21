@@ -221,6 +221,7 @@ Similarity Score: {round(1 - float(distance), 4)}
                 "pattern": problem.pattern,
                 "difficulty": problem.difficulty,
                 "status": problem.status,
+                "source_type": embedding.source_type,
                 "similarity_score": round(1 - float(distance), 4),
             }
             for embedding, problem, distance in results

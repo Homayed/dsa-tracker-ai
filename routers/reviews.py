@@ -6,6 +6,12 @@ import schemas
 from database import get_db
 from dependencies import get_current_user
 
+from services.embedding_service import (
+    delete_source_embedding,
+    is_auto_embed_enabled,
+    upsert_review_log_embedding,
+)
+
 router = APIRouter(
     tags=["Reviews"],
 )
@@ -42,6 +48,16 @@ def create_review_log(
     db.add(new_review)
     db.commit()
     db.refresh(new_review)
+    if is_auto_embed_enabled():
+        try:
+            upsert_review_log_embedding(
+                db=db,
+                review_log=new_review,
+                problem=problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for review log {new_review.id}: {exc}")
 
     return new_review
 
@@ -96,6 +112,16 @@ def update_review_log(
 
     db.commit()
     db.refresh(review)
+    if is_auto_embed_enabled():
+        try:
+            upsert_review_log_embedding(
+                db=db,
+                review_log=review,
+                problem=review.problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for review log {review.id}: {exc}")
 
     return review
 
@@ -117,6 +143,12 @@ def delete_review_log(
             detail="Review log not found",
         )
 
+    delete_source_embedding(
+        db=db,
+        user_id=current_user.id,
+        source_type="review_log",
+        source_id=review.id,
+    )
     db.delete(review)
     db.commit()
 

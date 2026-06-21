@@ -6,6 +6,12 @@ import schemas
 from database import get_db
 from dependencies import get_current_user
 
+from services.embedding_service import (
+    delete_source_embedding,
+    is_auto_embed_enabled,
+    upsert_mistake_embedding,
+)
+
 router = APIRouter(
     tags=["Mistakes"],
 )
@@ -40,6 +46,16 @@ def create_mistake(
     db.add(new_mistake)
     db.commit()
     db.refresh(new_mistake)
+    if is_auto_embed_enabled():
+        try:
+            upsert_mistake_embedding(
+                db=db,
+                mistake=new_mistake,
+                problem=problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for mistake {new_mistake.id}: {exc}")
 
     return new_mistake
 
@@ -95,6 +111,17 @@ def update_mistake(
     db.commit()
     db.refresh(mistake)
 
+    if is_auto_embed_enabled():
+        try:
+            upsert_mistake_embedding(
+                db=db,
+                mistake=mistake,
+                problem=mistake.problem,
+                user_id=current_user.id,
+            )
+        except Exception as exc:
+            print(f"Auto-embedding failed for mistake {mistake.id}: {exc}")
+
     return mistake
 
 
@@ -114,7 +141,12 @@ def delete_mistake(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Mistake not found",
         )
-
+    delete_source_embedding(
+        db=db,
+        user_id=current_user.id,
+        source_type="mistake",
+        source_id=mistake.id,
+    )
     db.delete(mistake)
     db.commit()
 

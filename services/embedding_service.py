@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -39,8 +40,18 @@ def create_embedding(text: str) -> list[float]:
     return response.data[0].embedding
 
 
+def get_value(obj: Any, field_name: str, default: str = "") -> str:
+    value = getattr(obj, field_name, default)
+
+    if value is None:
+        return default
+
+    return str(value)
+
+
 def build_problem_embedding_text(problem: DSAProblem) -> str:
     return f"""
+Source Type: problem
 Title: {problem.title}
 Platform: {problem.platform}
 Difficulty: {problem.difficulty}
@@ -55,21 +66,62 @@ Solution Code:
 """.strip()
 
 
-def upsert_problem_embedding(
+def build_note_embedding_text(note: Any, problem: DSAProblem) -> str:
+    return f"""
+Source Type: note
+Problem Title: {problem.title}
+Problem Pattern: {problem.pattern}
+Problem Difficulty: {problem.difficulty}
+Note Content:
+{get_value(note, "content")}
+""".strip()
+
+
+def build_mistake_embedding_text(mistake: Any, problem: DSAProblem) -> str:
+    return f"""
+Source Type: mistake
+Problem Title: {problem.title}
+Problem Pattern: {problem.pattern}
+Problem Difficulty: {problem.difficulty}
+Mistake Category: {get_value(mistake, "mistake_category")}
+Mistake Description:
+{get_value(mistake, "description")}
+Lesson Learned:
+{get_value(mistake, "lesson_learned")}
+""".strip()
+
+def build_review_log_embedding_text(review_log: Any, problem: DSAProblem) -> str:
+    return f"""
+Source Type: review_log
+Problem Title: {problem.title}
+Problem Pattern: {problem.pattern}
+Problem Difficulty: {problem.difficulty}
+Confidence Before: {get_value(review_log, "confidence_before")}
+Confidence After: {get_value(review_log, "confidence_after")}
+Was Solved Again: {get_value(review_log, "was_solved_again")}
+Time Taken Minutes: {get_value(review_log, "time_taken_minutes")}
+Review Notes:
+{get_value(review_log, "notes")}
+""".strip()
+
+
+def upsert_embedding(
     db: Session,
-    problem: DSAProblem,
     user_id: int,
+    problem_id: int,
+    source_type: str,
+    source_id: int,
+    content: str,
 ) -> ProblemEmbedding:
-    content = build_problem_embedding_text(problem)
     embedding = create_embedding(content)
 
     existing_embedding = (
         db.query(ProblemEmbedding)
         .filter(
             ProblemEmbedding.user_id == user_id,
-            ProblemEmbedding.problem_id == problem.id,
-            ProblemEmbedding.source_type == "problem",
-            ProblemEmbedding.source_id == problem.id,
+            ProblemEmbedding.problem_id == problem_id,
+            ProblemEmbedding.source_type == source_type,
+            ProblemEmbedding.source_id == source_id,
         )
         .first()
     )
@@ -86,9 +138,9 @@ def upsert_problem_embedding(
 
     new_embedding = ProblemEmbedding(
         user_id=user_id,
-        problem_id=problem.id,
-        source_type="problem",
-        source_id=problem.id,
+        problem_id=problem_id,
+        source_type=source_type,
+        source_id=source_id,
         content=content,
         embedding=embedding,
         embedding_model=EMBEDDING_MODEL,
@@ -99,6 +151,98 @@ def upsert_problem_embedding(
     db.refresh(new_embedding)
 
     return new_embedding
+
+
+def upsert_problem_embedding(
+    db: Session,
+    problem: DSAProblem,
+    user_id: int,
+) -> ProblemEmbedding:
+    content = build_problem_embedding_text(problem)
+
+    return upsert_embedding(
+        db=db,
+        user_id=user_id,
+        problem_id=problem.id,
+        source_type="problem",
+        source_id=problem.id,
+        content=content,
+    )
+
+
+def upsert_note_embedding(
+    db: Session,
+    note: Any,
+    problem: DSAProblem,
+    user_id: int,
+) -> ProblemEmbedding:
+    content = build_note_embedding_text(note, problem)
+
+    return upsert_embedding(
+        db=db,
+        user_id=user_id,
+        problem_id=problem.id,
+        source_type="note",
+        source_id=note.id,
+        content=content,
+    )
+
+
+def upsert_mistake_embedding(
+    db: Session,
+    mistake: Any,
+    problem: DSAProblem,
+    user_id: int,
+) -> ProblemEmbedding:
+    content = build_mistake_embedding_text(mistake, problem)
+
+    return upsert_embedding(
+        db=db,
+        user_id=user_id,
+        problem_id=problem.id,
+        source_type="mistake",
+        source_id=mistake.id,
+        content=content,
+    )
+
+
+def upsert_review_log_embedding(
+    db: Session,
+    review_log: Any,
+    problem: DSAProblem,
+    user_id: int,
+) -> ProblemEmbedding:
+    content = build_review_log_embedding_text(review_log, problem)
+
+    return upsert_embedding(
+        db=db,
+        user_id=user_id,
+        problem_id=problem.id,
+        source_type="review_log",
+        source_id=review_log.id,
+        content=content,
+    )
+
+
+def delete_source_embedding(
+    db: Session,
+    user_id: int,
+    source_type: str,
+    source_id: int,
+) -> None:
+    existing_embedding = (
+        db.query(ProblemEmbedding)
+        .filter(
+            ProblemEmbedding.user_id == user_id,
+            ProblemEmbedding.source_type == source_type,
+            ProblemEmbedding.source_id == source_id,
+        )
+        .first()
+    )
+
+    if existing_embedding:
+        db.delete(existing_embedding)
+        db.commit()
 
 
 def generate_rag_answer(question: str, context: str) -> str:
