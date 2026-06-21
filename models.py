@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String , DateTime, Text , ForeignKey
+from sqlalchemy import Column, Integer, String , DateTime, Text , ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -15,6 +15,7 @@ class User(Base):
     problems = relationship("DSAProblem", back_populates="owner")
     notes = relationship("ProblemNote", back_populates="owner")
     mistakes = relationship("Mistake", back_populates="owner")
+    review_logs = relationship("ReviewLog", back_populates="owner")
 
 class DSAProblem(Base):
     __tablename__ = "problems"
@@ -41,6 +42,7 @@ class DSAProblem(Base):
     owner = relationship("User", back_populates="problems")
     notes = relationship("ProblemNote", back_populates="problem", cascade="all, delete-orphan")
     mistakes = relationship("Mistake", back_populates="problem", cascade="all, delete-orphan")
+    review_logs = relationship("ReviewLog", back_populates="problem", cascade="all, delete-orphan")
 
 class ProblemNote(Base):
     __tablename__ = "problem_notes"
@@ -74,3 +76,23 @@ class Mistake(Base):
 
     owner = relationship("User", back_populates="mistakes")
     problem = relationship("DSAProblem", back_populates="mistakes")
+
+class ReviewLog(Base):
+    __tablename__ = "review_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    problem_id = Column(Integer, ForeignKey("problems.id"), nullable=False)
+
+    confidence_before = Column(Integer, nullable=True)
+    confidence_after = Column(Integer, nullable=True)
+    was_solved_again = Column(Boolean, default=False)
+    time_taken_minutes = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    reviewed_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", back_populates="review_logs")
+    problem = relationship("DSAProblem", back_populates="review_logs")

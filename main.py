@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from routers import auth, users, problems, mistakes, notes
+from routers import auth, users, problems, mistakes, notes, reviews
 
 app = FastAPI(
     title="DSA Tracker AI",
@@ -13,7 +13,7 @@ app.include_router(users.router)
 app.include_router(problems.router)
 app.include_router(notes.router)
 app.include_router(mistakes.router)
-
+app.include_router(reviews.router)
 
 @app.get("/")
 def home():

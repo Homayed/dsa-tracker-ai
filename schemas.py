@@ -184,3 +184,52 @@ class MistakeResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class ReviewLogCreate(BaseModel):
+    confidence_before: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description=(
+            "Confidence before review from 1 to 5. "
+            "1 = Not confident, 2 = Weak, 3 = Okay, "
+            "4 = Good, 5 = Strong."
+        ),
+    )
+    confidence_after: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description=(
+            "Confidence after review from 1 to 5. "
+            "1 = Not confident, 2 = Weak, 3 = Okay, "
+            "4 = Good, 5 = Strong."
+        ),
+    )
+    was_solved_again: bool = False
+    time_taken_minutes: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = None
+
+
+class ReviewLogUpdate(BaseModel):
+    confidence_before: Optional[int] = Field(default=None, ge=1, le=5)
+    confidence_after: Optional[int] = Field(default=None, ge=1, le=5)
+    was_solved_again: Optional[bool] = None
+    time_taken_minutes: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = None
+
+
+class ReviewLogResponse(BaseModel):
+    id: int
+    user_id: int
+    problem_id: int
+    confidence_before: Optional[int]
+    confidence_after: Optional[int]
+    was_solved_again: bool
+    time_taken_minutes: Optional[int]
+    notes: Optional[str]
+    reviewed_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
