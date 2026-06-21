@@ -280,3 +280,43 @@ Saved DSA tracker context:
     )
 
     return response.output_text
+
+def generate_study_recommendation(context: str, days: int) -> str:
+    if not context or not context.strip():
+        return "I could not find enough saved DSA tracker data to recommend a study plan yet."
+
+    client = get_openai_client()
+
+    response = client.responses.create(
+        model=CHAT_MODEL,
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an AI DSA study coach. "
+                    "Use only the user's saved DSA tracker data. "
+                    "Give practical, beginner-friendly study recommendations. "
+                    "Focus on weak patterns, mistakes, confidence levels, and review history. "
+                    "Do not invent problems that are not in the context unless you clearly mark them as suggestions."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"""
+Create a {days}-day DSA study recommendation plan.
+
+Saved DSA tracker context:
+{context}
+
+Your answer should include:
+1. Weak patterns
+2. Problems to review first
+3. Mistakes to focus on
+4. A simple {days}-day plan
+5. One motivational but realistic final note
+""".strip(),
+            },
+        ],
+    )
+
+    return response.output_text

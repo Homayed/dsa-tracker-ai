@@ -5,12 +5,13 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from dependencies import get_current_user
-from models import DSAProblem, ProblemEmbedding, User
+from models import DSAProblem, Mistake, ProblemEmbedding, ProblemNote, ReviewLog, User
 from services.embedding_service import (
     CHAT_MODEL,
     EMBEDDING_MODEL,
     create_embedding,
     generate_rag_answer,
+    generate_study_recommendation,
 )
 
 router = APIRouter(
@@ -21,6 +22,9 @@ router = APIRouter(
 class AskAIRequest(BaseModel):
     question: str = Field(..., min_length=2)
     limit: int = Field(3, ge=1, le=5)
+
+class StudyRecommendationRequest(BaseModel):
+    days: int = Field(7, ge=1, le=14)
 
 def build_problem_embedding_text(problem: DSAProblem) -> str:
     return f"""
@@ -226,4 +230,157 @@ Similarity Score: {round(1 - float(distance), 4)}
             }
             for embedding, problem, distance in results
         ],
+    }
+
+def build_study_recommendation_context(
+    problems: list[DSAProblem],
+    notes: list[ProblemNote],
+    mistakes: list[Mistake],
+    reviews: list[ReviewLog],
+) -> str:
+    problem_blocks = []
+
+    for problem in problems:
+        problem_blocks.append(
+            f"""
+Problem ID: {problem.id}
+Title: {problem.title}
+Platform: {problem.platform}
+Difficulty: {problem.difficulty}
+Pattern: {problem.pattern}
+Status: {problem.status}
+Confidence Level: {problem.confidence_level}
+Time Taken Minutes: {problem.time_taken_minutes}
+Time Complexity: {problem.time_complexity}
+Space Complexity: {problem.space_complexity}
+""".strip()
+        )
+
+    note_blocks = []
+
+    for note in notes:
+        note_blocks.append(
+            f"""
+Note ID: {note.id}
+Problem ID: {note.problem_id}
+Content: {note.content}
+""".strip()
+        )
+
+    mistake_blocks = []
+
+    for mistake in mistakes:
+        mistake_blocks.append(
+            f"""
+Mistake ID: {mistake.id}
+Problem ID: {mistake.problem_id}
+Mistake Category: {mistake.mistake_category}
+Description: {mistake.description}
+Lesson Learned: {mistake.lesson_learned}
+""".strip()
+        )
+
+    review_blocks = []
+
+    for review in reviews:
+        review_blocks.append(
+            f"""
+Review ID: {review.id}
+Problem ID: {review.problem_id}
+Confidence Before: {review.confidence_before}
+Confidence After: {review.confidence_after}
+Was Solved Again: {review.was_solved_again}
+Time Taken Minutes: {review.time_taken_minutes}
+Notes: {review.notes}
+""".strip()
+        )
+
+    return f"""
+PROBLEMS:
+{chr(10).join(problem_blocks)}
+
+NOTES:
+{chr(10).join(note_blocks)}
+
+MISTAKES:
+{chr(10).join(mistake_blocks)}
+
+REVIEW LOGS:
+{chr(10).join(review_blocks)}
+""".strip()
+
+@router.post("/recommend-study-plan")
+def recommend_study_plan(
+    request: StudyRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    problems = (
+        db.query(DSAProblem)
+        .filter(DSAProblem.user_id == current_user.id)
+        .order_by(DSAProblem.confidence_level.asc())
+        .limit(20)
+        .all()
+    )
+
+    notes = (
+        db.query(ProblemNote)
+        .filter(ProblemNote.user_id == current_user.id)
+        .order_by(ProblemNote.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    mistakes = (
+        db.query(Mistake)
+        .filter(Mistake.user_id == current_user.id)
+        .order_by(Mistake.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    reviews = (
+        db.query(ReviewLog)
+        .filter(ReviewLog.user_id == current_user.id)
+        .order_by(ReviewLog.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    if not problems:
+        return {
+            "message": "No DSA tracker data found yet.",
+            "recommendation": "Add some problems first, then I can recommend a study plan.",
+            "model": CHAT_MODEL,
+            "data_summary": {
+                "problems": 0,
+                "notes": 0,
+                "mistakes": 0,
+                "reviews": 0,
+            },
+        }
+
+    context = build_study_recommendation_context(
+        problems=problems,
+        notes=notes,
+        mistakes=mistakes,
+        reviews=reviews,
+    )
+
+    recommendation = generate_study_recommendation(
+        context=context,
+        days=request.days,
+    )
+
+    return {
+        "message": "Study recommendation generated successfully",
+        "model": CHAT_MODEL,
+        "days": request.days,
+        "recommendation": recommendation,
+        "data_summary": {
+            "problems": len(problems),
+            "notes": len(notes),
+            "mistakes": len(mistakes),
+            "reviews": len(reviews),
+        },
     }
