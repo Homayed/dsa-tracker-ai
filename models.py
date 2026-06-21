@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String , DateTime, Text , ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
+from pgvector.sqlalchemy import Vector
+
 from database import Base
 
 class User(Base):
@@ -16,6 +18,7 @@ class User(Base):
     notes = relationship("ProblemNote", back_populates="owner")
     mistakes = relationship("Mistake", back_populates="owner")
     review_logs = relationship("ReviewLog", back_populates="owner")
+    embeddings = relationship("ProblemEmbedding", back_populates="owner", cascade="all, delete-orphan")
 
 class DSAProblem(Base):
     __tablename__ = "problems"
@@ -43,6 +46,7 @@ class DSAProblem(Base):
     notes = relationship("ProblemNote", back_populates="problem", cascade="all, delete-orphan")
     mistakes = relationship("Mistake", back_populates="problem", cascade="all, delete-orphan")
     review_logs = relationship("ReviewLog", back_populates="problem", cascade="all, delete-orphan")
+    embeddings = relationship("ProblemEmbedding", back_populates="problem", cascade="all, delete-orphan")
 
 class ProblemNote(Base):
     __tablename__ = "problem_notes"
@@ -96,3 +100,23 @@ class ReviewLog(Base):
 
     owner = relationship("User", back_populates="review_logs")
     problem = relationship("DSAProblem", back_populates="review_logs")
+
+class ProblemEmbedding(Base):
+    __tablename__ = "problem_embeddings"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    problem_id = Column(Integer, ForeignKey("problems.id", ondelete="CASCADE"), nullable=False)
+
+    source_type = Column(String(50), nullable=False)
+    source_id = Column(Integer, nullable=True)
+
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(1536), nullable=False)
+    embedding_model = Column(String(100), nullable=False, default="text-embedding-3-small")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    owner = relationship("User", back_populates="embeddings")
+    problem = relationship("DSAProblem", back_populates="embeddings")
